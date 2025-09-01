@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Realtime Location Tracker</title>
+  <h1>Realtime Location Tracker</h1>
+  <div id="status" style="position: fixed; top: 50px; left: 10px; background: white; padding: 5px; border-radius: 5px; z-index: 1000; font-size: 12px;">Loading...</div>
+  <button id="stopBtn" onclick="stopSharing()" style="position: fixed; top: 80px; left: 10px; background: #e74c3c; color: white; border: none; padding: 8px 12px; border-radius: 5px; z-index: 1000; font-size: 12px; display: none;">Stop Sharing</button>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" />
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+  <!-- Config loader -->
+  <script src="config.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+    #map {
+      width: 100%;
+      height: 100vh;
+    }
+    
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+  </style>
+</head>
+<body>
+  <div id="map" style="width: 100%; height: 100vh;"></div>
+</body>
+</html>
+
+<!-- leaflet js  -->
+<script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>
+<script>
+    // Firebase configuration loaded from config.js
+    const firebaseConfig = loadFirebaseConfig();
+    
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    
+    // Generate unique user ID
+    const userId = 'user_' + Math.random().toString(36).substr(2, 9);
+    
+    // Listen for emergency alerts
+    database.ref('alerts').on('child_added', (snapshot) => {
+        const alert = snapshot.val();
+        const alertUserId = snapshot.key;
+        if (alertUserId !== userId) {
+            showEmergencyAlert(alert, alertUserId);
+        }
+    });
+    
+    function showEmergencyAlert(alert, alertUserId) {
+        // Show notification
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed; top: 70px; left: 10px; z-index: 9999;
+            background: #e74c3c; color: white; padding: 10px;
+            border-radius: 8px; font-size: 12px; max-width: 250px;
+        `;
+        notification.innerHTML = `
+            🚨 EMERGENCY: ${alertUserId}<br>
+            📍 ${alert.lat.toFixed(4)}°, ${alert.lng.toFixed(4)}°
+        `;
+        document.body.appendChild(notification);
+        
+        // Center map on emergency location
+        map.setView([alert.lat, alert.lng], 16);
+        
+        // Remove notification after 8 seconds
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.remove();
+            }
+        }, 8000);
+    }
+    
+    // Map initialization
+    var map = L.map('map').setView([14.0860746, 100.608406], 6);
+    var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    });
+    osm.addTo(map);
+    
+    var userMarkers = {};
+    
+    // Listen for location updates from all users
+    database.ref('locations').on('value', (snapshot) => {
+        const locations = snapshot.val();
+        
+        // Remove markers for users no longer sharing location
+        Object.keys(userMarkers).forEach(markerId => {
+            if (markerId.endsWith('_circle')) return; // Skip circle markers
+            if (!locations || !locations[markerId]) {
+                if (userMarkers[markerId]) {
+                    map.removeLayer(userMarkers[markerId]);
+                    delete userMarkers[markerId];
+                }
+                if (userMarkers[markerId + '_circle']) {
+                    map.removeLayer(userMarkers[markerId + '_circle']);
+                    delete userMarkers[markerId + '_circle'];
+                }
+            }
+        });
+        
+        // Add/update markers for current users
+        if (locations) {
+            Object.keys(locations).forEach(id => {
+                if (id !== userId) {
+                    updateUserMarker(id, locations[id]);
+                }
+            });
+        }
+    });
+    
+    function updateUserMarker(id, location) {
+        if (userMarkers[id]) {
+            map.removeLayer(userMarkers[id]);
+        }
+        if (userMarkers[id + '_circle']) {
+            map.removeLayer(userMarkers[id + '_circle']);
+        }
+        
+        const isEmergency = location.emergency === true;
+        const isLastKnown = location.lastKnown === true;
+        
+        let markerIcon, popupText;
+        
+        if (isEmergency) {
+            // Red marker for active emergency
+            markerIcon = L.divIcon({
+                html: '<div style="background: #e74c3c; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;"></div>',
+                iconSize: [20, 20],
+                className: 'emergency-marker'
+            });
+            popupText = `🚨 EMERGENCY: ${id}<br>📍 ${location.lat.toFixed(4)}°, ${location.lng.toFixed(4)}°<br>⏰ ${new Date(location.timestamp).toLocaleTimeString()}<br><button onclick="deleteMarker('${id}')" style="background: #e74c3c; color: white; border: none; padding: 3px 8px; border-radius: 3px; margin-top: 5px;">Delete</button>`;
+        } else if (isLastKnown) {
+            // Gray marker for last known position
+            markerIcon = L.divIcon({
+                html: '<div style="background: #95a5a6; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; opacity: 0.8;"></div>',
+                iconSize: [16, 16],
+                className: 'last-known-marker'
+            });
+            popupText = `📍 LAST KNOWN: ${id}<br>📍 ${location.lat.toFixed(4)}°, ${location.lng.toFixed(4)}°<br>⏰ Last seen: ${new Date(location.timestamp).toLocaleTimeString()}<br>🕐 Stopped: ${new Date(location.stoppedAt).toLocaleTimeString()}<br><button onclick="deleteMarker('${id}')" style="background: #e74c3c; color: white; border: none; padding: 3px 8px; border-radius: 3px; margin-top: 5px;">Delete</button>`;
+        } else {
+            // Blue marker for active sharing
+            markerIcon = L.divIcon({
+                html: '<div style="background: #3498db; width: 18px; height: 18px; border-radius: 50%; border: 2px solid white;"></div>',
+                iconSize: [18, 18],
+                className: 'active-marker'
+            });
+            popupText = `📍 ACTIVE: ${id}<br>📍 ${location.lat.toFixed(4)}°, ${location.lng.toFixed(4)}°<br>⏰ ${new Date(location.timestamp).toLocaleTimeString()}<br><button onclick="deleteMarker('${id}')" style="background: #e74c3c; color: white; border: none; padding: 3px 8px; border-radius: 3px; margin-top: 5px;">Delete</button>`;
+        }
+            
+        userMarkers[id] = L.marker([location.lat, location.lng], { icon: markerIcon })
+            .bindPopup(popupText)
+            .addTo(map);
+            
+        // Add emergency circle for emergency locations only
+        if (isEmergency) {
+            userMarkers[id + '_circle'] = L.circle([location.lat, location.lng], {
+                radius: location.accuracy || 100,
+                color: 'red',
+                fillColor: '#ff0000',
+                fillOpacity: 0.2
+            }).addTo(map);
+        }
+    }
+    
+    function deleteMarker(markerId) {
+        if (confirm(`Delete marker for ${markerId}?`)) {
+            if (userMarkers[markerId]) {
+                map.removeLayer(userMarkers[markerId]);
+                delete userMarkers[markerId];
+            }
+            if (userMarkers[markerId + '_circle']) {
+                map.removeLayer(userMarkers[markerId + '_circle']);
+                delete userMarkers[markerId + '_circle'];
+            }
+            alert('Marker deleted successfully!');
+        }
+    }
+    
+    if(!navigator.geolocation) {
+        alert("Your browser doesn't support geolocation feature!")
+    } else {
+        document.getElementById('status').innerHTML = 'Requesting location permission...';
+        // Request permission first
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                document.getElementById('status').innerHTML = 'Location enabled ✓';
+                document.getElementById('stopBtn').style.display = 'block';
+                isSharing = true;
+                getPosition(position);
+                startLocationTracking();
+            },
+            handleError,
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+    }
+    
+    function startLocationTracking() {
+        // Use watchPosition for continuous tracking
+        watchId = navigator.geolocation.watchPosition(
+            getPosition,
+            handleError,
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+        );
+        
+        // Backup interval method
+        locationInterval = setInterval(() => {
+            if (Date.now() - lastUpdateTime > 10000) { // If no update for 10 seconds
+                navigator.geolocation.getCurrentPosition(getPosition, handleError);
+            }
+        }, 8000);
+        
+        // Keep-alive mechanism
+        keepAliveInterval = setInterval(() => {
+            if (isSharing) {
+                database.ref('locations/' + userId + '/keepAlive').set(Date.now());
+            }
+        }, 30000);
+    }
+    
+    function handleError(error) {
+        console.log('Location error:', error);
+        switch(error.code) {
+            case error.PERMISSION_DENIED:
+                document.getElementById('status').innerHTML = '❌ Location denied';
+                break;
+            case error.POSITION_UNAVAILABLE:
+                document.getElementById('status').innerHTML = '❌ Location unavailable - Retrying...';
+                // Retry after 5 seconds
+                setTimeout(() => {
+                    if (isSharing) {
+                        navigator.geolocation.getCurrentPosition(getPosition, handleError);
+                    }
+                }, 5000);
+                break;
+            case error.TIMEOUT:
+                document.getElementById('status').innerHTML = '⏱️ Location timeout - Retrying...';
+                // Retry immediately
+                setTimeout(() => {
+                    if (isSharing) {
+                        navigator.geolocation.getCurrentPosition(getPosition, handleError);
+                    }
+                }, 1000);
+                break;
+        }
+    }
+    
+    var myMarker, myCircle;
+    var locationInterval;
+    var isSharing = false;
+    var watchId;
+    var lastUpdateTime = 0;
+    var keepAliveInterval;
+    
+    function getPosition(position){
+        if (!isSharing) return; // Don't update if sharing stopped
+        
+        var lat = position.coords.latitude;
+        var lng = position.coords.longitude;
+        var accuracy = position.coords.accuracy;
+        
+        lastUpdateTime = Date.now();
+        
+        // Update Firebase with current location
+        database.ref('locations/' + userId).set({
+            lat: lat,
+            lng: lng,
+            accuracy: accuracy,
+            timestamp: lastUpdateTime,
+            keepAlive: lastUpdateTime
+        });
+        
+        // Update own marker
+        if(myMarker) {
+            map.removeLayer(myMarker);
+        }
+        if(myCircle) {
+            map.removeLayer(myCircle);
+        }
+        
+        myMarker = L.marker([lat, lng]).bindPopup('You are here').addTo(map);
+        myCircle = L.circle([lat, lng], {radius: accuracy, color: 'blue'}).addTo(map);
+        
+        // Center map on first location
+        if (!window.locationSet) {
+            map.setView([lat, lng], 15);
+            window.locationSet = true;
+        }
+        
+        // Update status
+        document.getElementById('status').innerHTML = `Location active ✓ (${new Date().toLocaleTimeString()})`;
+        
+        console.log("Your coordinate is: Lat: "+ lat +" Long: "+ lng+ " Accuracy: "+ accuracy);
+    }
+    
+    function stopSharing() {
+        if (confirm('Stop sharing your location?')) {
+            isSharing = false;
+            
+            // Stop all location tracking
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            if (locationInterval) {
+                clearInterval(locationInterval);
+                locationInterval = null;
+            }
+            if (keepAliveInterval) {
+                clearInterval(keepAliveInterval);
+                keepAliveInterval = null;
+            }
+            
+            // Remove from Firebase
+            database.ref('locations/' + userId).remove();
+            
+            // Remove markers
+            if (myMarker) {
+                map.removeLayer(myMarker);
+                myMarker = null;
+            }
+            if (myCircle) {
+                map.removeLayer(myCircle);
+                myCircle = null;
+            }
+            
+            // Update UI
+            document.getElementById('status').innerHTML = 'Location sharing stopped';
+            document.getElementById('stopBtn').style.display = 'none';
+            
+            alert('Location sharing stopped successfully!');
+        }
+    }
+    
+    // Prevent page from sleeping (for mobile browsers)
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden && isSharing) {
+            console.log('Page hidden - maintaining location tracking');
+        } else if (!document.hidden && isSharing) {
+            console.log('Page visible - resuming location tracking');
+            // Restart tracking if it stopped
+            setTimeout(() => {
+                if (isSharing && Date.now() - lastUpdateTime > 15000) {
+                    navigator.geolocation.getCurrentPosition(getPosition, handleError);
+                }
+            }, 1000);
+        }
+    });
+
+</script>

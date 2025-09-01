@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeGuard - Women Safety Alert System</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" />
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+    <!-- Config loader -->
+    <script src="config.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon">🛡️</div>
+                    <h1>SafeGuard</h1>
+                </div>
+                <div class="auth-section">
+                    <span class="status-indicator status-active"></span>
+                    <span>Device Connected</span>
+                    <button class="btn" onclick="openModal('loginModal')">Login</button>
+                    <button class="btn btn-secondary" onclick="openModal('registerModal')">Register</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <div class="card alert-dashboard">
+                <h2>🚨 Live Alert Dashboard</h2>
+                <div class="device-status">
+                    <strong>Hardware Device Status:</strong>
+                    <span class="status-indicator status-active"></span>
+                    <span>Online - GPS Active</span>
+                </div>
+                
+                <div class="map-container" id="mapContainer">
+                    <div class="map-placeholder" id="mapPlaceholder">
+                        <h3>🗺️ Real-Time Location Tracking</h3>
+                        <p>Choose an option below to get started</p>
+                        <div class="map-buttons">
+                            <button class="panic-button" onclick="triggerSOS()">
+                                EMERGENCY<br>SOS
+                            </button>
+                            <button class="view-map-btn" onclick="viewOnlyMap()">
+                                VIEW MAP<br>ONLY
+                            </button>
+                        </div>
+                    </div>
+                    <div id="map" style="width: 100%; height: 100%; display: none;"></div>
+                </div>
+
+                <div id="alertsList">
+                    <h3>📋 Active Alerts</h3>
+                    <p style="color: #7f8c8d; font-style: italic;">No active alerts at the moment</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>👥 Emergency Contacts</h2>
+                <button class="btn btn-secondary" onclick="openModal('addContactModal')" style="margin-bottom: 20px;">Add Contact</button>
+                
+                <div class="emergency-contacts" id="contactsList">
+                    <div class="contact-item" data-default="true">
+                        <div>
+                            <strong>Police Emergency</strong><br>
+                            <small>📞 <a href="tel:100" style="color: #3498db; text-decoration: none;">100</a></small>
+                        </div>
+                        <span class="alert-status" style="background: #27ae60; cursor: pointer;" onclick="callContact('100', 'Police Emergency')">CALL</span>
+                    </div>
+                    <div class="contact-item" data-default="true">
+                        <div>
+                            <strong>Women Helpline</strong><br>
+                            <small>📞 <a href="tel:1091" style="color: #3498db; text-decoration: none;">1091</a></small>
+                        </div>
+                        <span class="alert-status" style="background: #27ae60; cursor: pointer;" onclick="callContact('1091', 'Women Helpline')">CALL</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>⚙️ Device Settings</h2>
+                <div class="form-group">
+                    <label>Device ID:</label>
+                    <input type="text" class="form-control" value="SG001-2025" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Alert Frequency (seconds):</label>
+                    <input type="number" class="form-control" value="30" min="10" max="300">
+                </div>
+                <div class="form-group">
+                    <label>Auto-Send Location:</label>
+                    <select class="form-control">
+                        <option value="emergency">Emergency Only</option>
+                        <option value="continuous">Continuous</option>
+                        <option value="disabled">Disabled</option>
+                    </select>
+                </div>
+                <button class="btn">Save Settings</button>
+            </div>
+
+            <div class="card safety-resources">
+                <h2>🆘 Safety Resources & Helplines</h2>
+                <div class="resources-grid">
+                    <div class="resource-card" onclick="callHelpline('100')">
+                        <h3>🚔 Police</h3>
+                        <p>Emergency: 100</p>
+                    </div>
+                    <div class="resource-card" onclick="callHelpline('1091')">
+                        <h3>👩‍⚖️ Women Helpline</h3>
+                        <p>24/7 Support: 1091</p>
+                    </div>
+                    <div class="resource-card" onclick="callHelpline('108')">
+                        <h3>🏥 Medical Emergency</h3>
+                        <p>Ambulance: 108</p>
+                    </div>
+                    <div class="resource-card" onclick="showNearbyStations()">
+                        <h3>📍 Nearby Stations</h3>
+                        <p>Police & Hospitals</p>
+                    </div>
+                    <div class="resource-card" onclick="showSafetyTips()">
+                        <h3>💡 Safety Tips</h3>
+                        <p>Prevention Guide</p>
+                    </div>
+                    <div class="resource-card" onclick="showNGOs()">
+                        <h3>🤝 Women NGOs</h3>
+                        <p>Support Organizations</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('loginModal')">&times;</span>
+            <h2>Login to SafeGuard</h2>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" class="form-control" placeholder="your.email@example.com">
+            </div>
+            <div class="form-group">
+                <label>Password:</label>
+                <input type="password" class="form-control" placeholder="Enter your password">
+            </div>
+            <button class="btn" onclick="login()" style="width: 100%;">Login</button>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div id="registerModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('registerModal')">&times;</span>
+            <h2>Register for SafeGuard</h2>
+            <div class="form-group">
+                <label>Full Name:</label>
+                <input type="text" class="form-control" placeholder="Enter your full name">
+            </div>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" class="form-control" placeholder="your.email@example.com">
+            </div>
+            <div class="form-group">
+                <label>Phone Number:</label>
+                <input type="tel" class="form-control" placeholder="+91 98765 43210">
+            </div>
+            <div class="form-group">
+                <label>Password:</label>
+                <input type="password" class="form-control" placeholder="Create a strong password">
+            </div>
+            <div class="form-group">
+                <label>Device ID (from hardware):</label>
+                <input type="text" class="form-control" placeholder="SG001-2025">
+            </div>
+            <button class="btn" onclick="register()" style="width: 100%;">Register</button>
+        </div>
+    </div>
+
+    <!-- Add Contact Modal -->
+    <div id="addContactModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('addContactModal')">&times;</span>
+            <h2>Add Emergency Contact</h2>
+            <div class="form-group">
+                <label>Contact Name:</label>
+                <input type="text" class="form-control" id="contactName" placeholder="Family Member / Friend">
+            </div>
+            <div class="form-group">
+                <label>Phone Number:</label>
+                <input type="tel" class="form-control" id="contactPhone" placeholder="+91 98765 43210">
+            </div>
+            <div class="form-group">
+                <label>Email (Optional):</label>
+                <input type="email" class="form-control" id="contactEmail" placeholder="contact@example.com">
+            </div>
+            <div class="form-group">
+                <label>Relationship:</label>
+                <select class="form-control" id="contactRelation">
+                    <option value="family">Family</option>
+                    <option value="friend">Friend</option>
+                    <option value="colleague">Colleague</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <button class="btn" onclick="addContact()" style="width: 100%;">Add Contact</button>
+        </div>
+    </div>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>
+    <script src="index.js"></script>
+
+</body>
+</html>`

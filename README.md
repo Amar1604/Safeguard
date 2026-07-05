@@ -19,22 +19,29 @@
 
 ## 🚨 Features
 
-### Core Safety
-- **Emergency SOS Button** — One-touch emergency alert trigger
-- **Real-Time GPS Tracking** — Automatic location detection and sharing
-- **Emergency Contact Notifications** — Instant SMS/Email alerts to predefined contacts
-- **Live Alert Dashboard** — Real-time monitoring of active alerts
-- **Location Mapping** — Visual representation of incident locations
+### Core Safety & Live Tracking
+- **Emergency SOS Button** — One-touch emergency alert trigger.
+- **Real-Time GPS Tracking** — Automatic location detection and sharing.
+- **Location Mapping** — Visual representation of incident locations with pulsing markers.
+- **Coordinate Breadcrumbs Trail** — Traces and draws a dashed polyline of the victim's route history on the map while an SOS is active.
+- **Synthesized Web Audio Siren** — Generates a warning alarm tone completely client-side using the HTML5 Web Audio API (no external audio assets required).
 
-### User Management
-- **Secure Authentication** — Login and registration system
-- **Device Integration** — Hardware device connectivity status
-- **Emergency Contact Management** — Add and manage trusted contacts
+### IoT Hardware Device Simulation
+- **Visual Telemetry Controls** — Side dashboard panel allowing users to test wearable device inputs without real hardware:
+  - ESP32 hardware connection status toggling.
+  - Custom battery status slider (with automated low battery alerts).
+  - Walk/Run GPS movement simulator (auto-updates coordinates on map).
+  - Physical SOS button trigger simulation.
 
-### Alert Management
-- **Alert History** — Full log of past emergency incidents
-- **Status Monitoring** — Active, resolved, and pending alert states
-- **Automatic Resolution** — Configurable auto-resolution timers
+### User & Contacts Management
+- **Secure Authentication** — Unified Firebase Auth login and registration system.
+- **Device Integration** — Hardware device connectivity status indicators.
+- **Emergency Contact Panel** — Cloud syncing of contacts via Firebase Realtime Database with secure browser-based `localStorage` fallback for offline resiliency.
+
+### Alert Management & Admin Controls
+- **Responder Map Portal (Maps.html)** — A full-screen administrative tracking map designed for dispatch centers with administrative sound notification warnings.
+- **Manual Alert Resolution** — Admins/Responders can mark an active alert as resolved directly from the Leaflet marker details popup, syncing safety updates back to Firebase.
+- **Auto-Resolution** — Configurable alert timeout (default 2 minutes) if no response is detected.
 
 ---
 
@@ -43,116 +50,116 @@
 | Layer | Technology |
 |-------|------------|
 | Frontend | HTML5, CSS3, JavaScript (ES6+) |
-| Styling | Custom CSS, Responsive Design |
-| Location | Browser Geolocation API |
-| Real-time | JavaScript Event-Driven Architecture |
-| Storage | Browser LocalStorage |
-| Notifications | SMS + Email (multi-channel) |
+| Styling | Custom CSS, Dark Glassmorphism, Responsive Grid |
+| Location | Browser Geolocation API, Leaflet.js Mapping |
+| Database | Firebase Realtime Database (Location & Alert syncing) |
+| Auth | Firebase Authentication |
+| Sound | HTML5 Web Audio API Synthesizer |
+| Storage | Browser LocalStorage (fallback & configurations) |
 
 ---
 
 ## 📁 Project Structure
 
 ```
-women-safety/
-├── index.js          # Main application logic and functions
-├── login.html        # Main HTML interface
-├── styles.css        # Application styling
-└── README.md         # Project documentation
+SafeGuard-main/
+├── index.html        # Main dashboard interface
+├── index.js          # Main application logic & Leaflet setup
+├── styles.css        # Glassmorphic dark-theme styles
+├── login.html        # Standalone login fallback page
+├── register.html     # Signup page with database registry hooks
+├── Maps.html         # Responder tracking portal
+├── config.js         # Firebase credentials loader
+├── FIREBASE_RULES.md # Database rules setup reference
+├── FIREBASE_SETUP.md # Web project configuration reference
+└── README.md         # Unified project documentation
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Getting Started (Local Run)
 
-### Prerequisites
-- Modern web browser with JavaScript enabled
-- Internet connection for geolocation services
-- Hardware safety device *(optional, for full functionality)*
+### 1. Prerequisites
+- Modern web browser with JavaScript enabled.
+- A local HTTP server is required to serve the files over HTTP and bypass browser module/storage restrictions.
 
-### Installation
+### 2. Start a Local Server
+Run one of the following commands in the project directory:
 
+**Using Python:**
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/women-safety.git
-cd women-safety
-
-# Open in browser
-open login.html
-# No build steps — fully client-side
+python -m http.server 8000
 ```
 
-### Usage
+**Using Node.js (http-server):**
+```bash
+npx http-server -p 8000
+```
 
-1. **Register / Login** — Create an account or log in
-2. **Add Emergency Contacts** — Configure who receives alerts
-3. **Activate SOS** — Press emergency button when in danger
-4. **Monitor Alerts** — View live alerts on the dashboard
+### 3. Open the Portals
+Open your browser and navigate to:
+- **Dashboard & Simulator**: [http://localhost:8000/index.html](http://localhost:8000/index.html)
+- **Admin Tracker**: [http://localhost:8000/Maps.html](http://localhost:8000/Maps.html)
 
 ---
 
-## 🔧 Configuration
+## 🔧 Firebase Configuration Setup
 
-### Emergency Contacts
-- Add multiple emergency contacts
-- Supports SMS and email notifications
-- Stored securely in browser LocalStorage
+SafeGuard is configured to work out-of-the-box using fallback demo credentials, but for production or standalone deployments, follow these steps to connect your own database:
 
-### Alert Settings
-- Auto-resolution timer *(default: 2 minutes)*
-- Location accuracy preferences
-- Notification channel preferences
+1. Create a project at the [Firebase Console](https://console.firebase.google.com/).
+2. Add a Web App to your project and copy the configuration keys.
+3. In the SafeGuard Dashboard, click **Configure Firebase Cloud** inside the **Device Settings** card.
+4. Input your project credentials (API Key, Project ID, Database URL) and click **Save & Refresh**.
+5. Enable **Email/Password Provider** inside Firebase Auth.
+6. Enable **Realtime Database** and set the security rules to allow read/write access (refer to [FIREBASE_RULES.md](file:///d:/SafeGuard-main/FIREBASE_RULES.md)).
 
 ---
 
 ## 📊 Architecture & Diagrams
-
----
 
 ### 1. 🏗️ System Architecture
 
 ```mermaid
 graph TB
     subgraph DEVICE["📱 Client Device"]
-        HW["🔴 Hardware SOS Button"]
+        HW["🔴 Hardware SOS Button / Simulator"]
         GEO["📍 Geolocation API"]
-        UI["🖥️ Web Dashboard\n(login.html)"]
+        UI["🖥️ Web Dashboard\n(index.html)"]
         JS["⚙️ App Logic\n(index.js)"]
-        LS["💾 LocalStorage\n(contacts + history)"]
+        LS["💾 LocalStorage\n(contacts fallback)"]
     end
 
-    subgraph NOTIF["📣 Notification Layer"]
-        SMS["📱 SMS Alert"]
-        EMAIL["📧 Email Alert"]
-        DASH["📊 Dashboard Alert"]
+    subgraph CLOUD["☁️ Firebase Cloud Layer"]
+        AUTH["🔐 Firebase Auth"]
+        DB["🗄️ Realtime Database"]
+    end
+
+    subgraph ADMIN["📡 Dispatcher Portal"]
+        MAP["🗺️ Maps.html Tracker"]
     end
 
     subgraph CONTACTS["👥 Emergency Contacts"]
-        C1["Contact 1"]
-        C2["Contact 2"]
-        C3["Contact N..."]
+        C1["Contact 1 (Phone/Email)"]
+        C2["Contact 2 (Phone/Email)"]
     end
 
     HW -->|Trigger| JS
     UI -->|Manual SOS| JS
     GEO -->|GPS Coords| JS
-    JS -->|Read/Write| LS
-    JS --> SMS
-    JS --> EMAIL
-    JS --> DASH
-
-    SMS --> C1
-    EMAIL --> C2
-    DASH --> C3
+    JS -->|Sync Profile| AUTH
+    JS -->|Sync Location & Alerts| DB
+    JS -->|Read/Write Fallback| LS
+    DB -->|Push Alert updates| MAP
+    JS -->|Alert Link| C1
+    JS -->|Alert Link| C2
 
     style HW fill:#c0392b,color:#fff
     style JS fill:#8e44ad,color:#fff
     style GEO fill:#2980b9,color:#fff
     style UI fill:#2980b9,color:#fff
-    style LS fill:#27ae60,color:#fff
-    style SMS fill:#e67e22,color:#fff
-    style EMAIL fill:#e67e22,color:#fff
-    style DASH fill:#e67e22,color:#fff
+    style DB fill:#e67e22,color:#fff
+    style MAP fill:#27ae60,color:#fff
 ```
 
 ---
@@ -161,34 +168,33 @@ graph TB
 
 ```mermaid
 sequenceDiagram
-    participant U as 👩 User
-    participant HW as 🔴 SOS Button
-    participant APP as ⚙️ App Logic
-    participant GPS as 📍 GPS API
-    participant LS as 💾 LocalStorage
-    participant SMS as 📱 SMS
-    participant EMAIL as 📧 Email
-    participant DASH as 📊 Dashboard
+    participant U as 👩 User / Simulator
+    participant APP as ⚙️ index.js
+    participant GPS as 📍 Geolocation API
+    participant DB as ☁️ Firebase Database
+    participant MAP as 📡 Maps.html (Admin)
+    participant C as 👥 Contacts
 
-    U->>HW: Press SOS / Manual trigger
-    HW->>APP: Emergency event fired
-    APP->>GPS: Request current coordinates
+    U->>APP: Press SOS Button (UI or HW Simulator)
+    APP->>GPS: Request coordinates
     GPS-->>APP: lat, lng, accuracy
-    APP->>LS: Load emergency contacts
-    LS-->>APP: Contact list
-    APP->>SMS: Send SMS alert + location
-    APP->>EMAIL: Send Email alert + location
-    APP->>DASH: Push live alert to dashboard
-    APP->>LS: Save incident to history
-    DASH-->>U: Real-time alert visible
+    APP->>DB: Push Alert (ACTIVE) & Locations node
+    DB->>MAP: Trigger Alert Added (Plays buzzer + pans map)
+    APP->>C: Open phone Quick-dial link
+    
+    loop Real-Time Location Loop
+        GPS-->>APP: Updated lat, lng
+        APP->>DB: Set Locations node
+        DB->>MAP: Render moving marker + polyline trail
+    end
 
-    Note over APP,DASH: Auto-resolution timer starts (default 2 min)
-
-    alt Manual resolve
-        U->>DASH: Mark as resolved
-        DASH->>LS: Update alert status
-    else Auto-resolve
-        APP->>DASH: Status → Resolved (timeout)
+    alt Manual resolve by User
+        U->>APP: Click Stop sharing
+        APP->>DB: Update node status to RESOLVED
+        DB->>MAP: Marker turns gray (lastKnown), resolves
+    else Manual resolve by Admin
+        MAP->>DB: Click Resolve button in popup
+        DB->>APP: Status changes to RESOLVED, stops audio
     end
 ```
 
@@ -198,29 +204,21 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    START(["🚀 Open App"]) --> LOGIN["Login Page\n(login.html)"]
-    LOGIN --> HAS{"Existing\nAccount?"}
-
-    HAS -->|Yes| CRED["Enter Credentials"]
-    HAS -->|No| REG["Register New Account"]
-
-    REG --> SAVE["Save to LocalStorage"]
-    SAVE --> CRED
-
-    CRED --> AUTH{"Auth\nValid?"}
-    AUTH -->|❌ No| ERR["Show Error"] --> CRED
-    AUTH -->|✅ Yes| DASH["🏠 Main Dashboard"]
-
-    DASH --> CONTACTS["Manage Emergency\nContacts"]
-    DASH --> SOS["🔴 SOS Button"]
-    DASH --> HISTORY["📋 Alert History"]
-    DASH --> DEVICE["📡 Device Status"]
-
-    style START fill:#27ae60,color:#fff
-    style DASH fill:#2980b9,color:#fff
-    style SOS fill:#c0392b,color:#fff
-    style AUTH fill:#8e44ad,color:#fff
-    style ERR fill:#e74c3c,color:#fff
+    START(["🚀 Open App"]) --> AUTH_CHECK{"Authenticated?"}
+    AUTH_CHECK -->|❌ No| LOGIN["Show Login Modal / login.html"]
+    AUTH_CHECK -->|✅ Yes| DASH["🏠 Open Main Dashboard"]
+    
+    LOGIN --> HAS_ACCOUNT{"Have Account?"}
+    HAS_ACCOUNT -->|Yes| CRED["Enter Credentials"]
+    HAS_ACCOUNT -->|No| REG["Register (register.html)"]
+    
+    REG -->|Save Profile| DB["Realtime DB Users node"]
+    DB --> CRED
+    CRED -->|Firebase SignIn| AUTH_CHECK
+    
+    DASH --> SIM["🛠️ Run Hardware Simulator"]
+    DASH --> SOS["🔴 Trigger SOS Alert"]
+    DASH --> SETTINGS["⚙️ Manage Firebase keys"]
 ```
 
 ---
@@ -230,163 +228,36 @@ flowchart TD
 ```mermaid
 stateDiagram-v2
     [*] --> IDLE : App loaded
-
-    IDLE --> TRIGGERED : SOS pressed / Device signal
-    TRIGGERED --> LOCATING : Fetch GPS coordinates
-    LOCATING --> NOTIFYING : Coords acquired
-    LOCATING --> NOTIFYING : Timeout — use last known location
-
-    NOTIFYING --> ACTIVE : All contacts notified
-    ACTIVE --> RESOLVED : User resolves manually
-    ACTIVE --> RESOLVED : Auto-timer expires (2 min)
-    ACTIVE --> ESCALATED : No response detected
-
-    ESCALATED --> RESOLVED : Authorities notified + resolved
-    RESOLVED --> LOGGED : Saved to alert history
-
-    LOGGED --> IDLE : Ready for next event
+    IDLE --> TRIGGERED : SOS pressed / HW signal
+    TRIGGERED --> LOCATING : Fetch Geolocation
+    LOCATING --> NOTIFYING : Coordinates acquired
+    NOTIFYING --> ACTIVE : Admin & contacts alert dispatched
+    ACTIVE --> RESOLVED : User stops sharing / Admin resolves
+    ACTIVE --> RESOLVED : Auto-resolution timeout (2 min)
+    RESOLVED --> IDLE : Clean up database nodes
 ```
-
----
-
-### 5. 🗂️ Data Flow & Storage
-
-```mermaid
-graph LR
-    subgraph INPUT["📥 Input Sources"]
-        HW["🔴 Hardware Button"]
-        WEB["🖱️ Web UI Trigger"]
-        GPS["📍 GPS Signal"]
-    end
-
-    subgraph PROCESS["⚙️ index.js Processing"]
-        EVT["Event Handler"]
-        LOC["Location Resolver"]
-        ALT["Alert Builder"]
-        NOT["Notification Dispatcher"]
-    end
-
-    subgraph STORAGE["💾 LocalStorage"]
-        USR["users{}"]
-        CON["contacts[]"]
-        HIST["alert_history[]"]
-        SET["settings{}"]
-    end
-
-    subgraph OUTPUT["📤 Outputs"]
-        SMS2["SMS"]
-        MAIL["Email"]
-        UI2["Dashboard UI"]
-    end
-
-    HW --> EVT
-    WEB --> EVT
-    GPS --> LOC
-    EVT --> LOC --> ALT --> NOT
-    ALT --> HIST
-    NOT --> SMS2
-    NOT --> MAIL
-    NOT --> UI2
-
-    USR --> EVT
-    CON --> NOT
-    SET --> ALT
-
-    style EVT fill:#8e44ad,color:#fff
-    style LOC fill:#2980b9,color:#fff
-    style ALT fill:#e67e22,color:#fff
-    style NOT fill:#c0392b,color:#fff
-```
-
----
-
-### 6. 📱 Component Structure
-
-```mermaid
-graph TD
-    APP["🛡️ SafeGuard App"]
-
-    APP --> AUTH["🔐 Auth Module\n(login/register)"]
-    APP --> CORE["🔴 SOS Core\n(trigger + GPS)"]
-    APP --> DASH2["📊 Dashboard\n(live alerts)"]
-    APP --> CONT["👥 Contact Manager\n(add/remove)"]
-    APP --> HIST2["📋 History Viewer\n(past incidents)"]
-    APP --> DEV["📡 Device Monitor\n(HW status)"]
-
-    AUTH --> LS1["LocalStorage\nusers"]
-    CORE --> LS2["LocalStorage\nalert_history"]
-    CONT --> LS3["LocalStorage\ncontacts"]
-    DASH2 --> CORE
-    DASH2 --> HIST2
-
-    style APP fill:#c0392b,color:#fff
-    style CORE fill:#8e44ad,color:#fff
-    style AUTH fill:#2980b9,color:#fff
-    style DASH2 fill:#27ae60,color:#fff
-    style CONT fill:#e67e22,color:#fff
-    style HIST2 fill:#7f8c8d,color:#fff
-    style DEV fill:#7f8c8d,color:#fff
-```
-
----
-
-## 📱 How It Works
-
-1. **Detection** — Hardware device or manual UI trigger fires the SOS event
-2. **Location** — GPS coordinates captured automatically via Geolocation API
-3. **Notification** — Emergency contacts receive instant SMS + email with location
-4. **Tracking** — Location pinned on the live dashboard in real time
-5. **Response** — Alert resolved manually or auto-expires after 2 minutes
-6. **Logging** — Full incident saved to history for future reference
 
 ---
 
 ## 🔒 Privacy & Security
 
-- Location data processed **locally** wherever possible
-- Emergency contacts stored in **encrypted browser storage**
-- **No personal data** transmitted without explicit user consent
-- All outbound communications are **encrypted in transit**
-- Zero third-party analytics or tracking
+- Location data is processed **locally** and synced to Firebase only when an active SOS alert is running.
+- Custom configurations and database project keys are stored securely inside the client's **browser local storage**.
+- All database communication is encrypted in transit by Firebase SSL.
 
 ---
 
 ## 🤝 Contributing
 
 Contributions to improve women's safety technology are welcome!
-
-```bash
-# Fork → branch → commit → push → PR
-git checkout -b feature/YourFeature
-git commit -m 'Add YourFeature'
-git push origin feature/YourFeature
-# Open a Pull Request
-```
-
-**Guidelines:**
-- Do not reduce alert sensitivity or response speed
-- Test all SOS flows before submitting PR
-- Include screenshots or screen recordings as proof
-- Keep location accuracy logic intact
-
----
-
-## 🙋‍♀️ Support
-
-- Open an issue on GitHub
-- Contact the development team
-- Check documentation for common solutions
+1. Fork the project.
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3. Commit your changes (`git commit -m 'Add AmazingFeature'`).
+4. Push to the branch (`git push origin feature/AmazingFeature`).
+5. Open a Pull Request.
 
 ---
 
 ## 📄 License
 
-MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-<div align="center">
-
-**SafeGuard** — Empowering women with technology for safety and peace of mind. 🛡️✨
-
-</div>
+Distributed under the MIT License. See `LICENSE` for more information.

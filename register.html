@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head >
+    <!-- Add these in your <head> if not already present -->
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+<script src="config.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - SafeGuard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">🛡️</div>
+                <h1>SafeGuard</h1>
+            </div>
+        </header>
+
+        <div class="login-form">
+            <h2>Register for SafeGuard</h2>
+            <form id="registerForm" onsubmit="register(event)">
+                <div class="form-group">
+                    <label for="registerName">Full Name:</label>
+                    <input type="text" class="form-control" id="registerName" placeholder="Enter your full name" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">Email:</label>
+                    <input type="email" class="form-control" id="registerEmail" placeholder="your.email@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPhone">Phone Number:</label>
+                    <input type="tel" class="form-control" id="registerPhone" placeholder="+91 98765 43210" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password:</label>
+                    <input type="password" class="form-control" id="registerPassword" placeholder="Create a strong password" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerDeviceId">Device ID:</label>
+                    <input type="text" class="form-control" id="registerDeviceId" placeholder="SG001-2025" required>
+                </div>
+                <button class="btn" type="submit" style="width: 100%;">Register</button>
+                <div class="links">
+                    <a href="login.html">Already have an account? Login</a>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script src="index.js"></script>
+</body>
+</html>

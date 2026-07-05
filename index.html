@@ -4,11 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SafeGuard - Women Safety Alert System</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" />
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
     <!-- Config loader -->
     <script src="config.js"></script>
@@ -60,6 +65,42 @@
                     <p style="color: #7f8c8d; font-style: italic;">No active alerts at the moment</p>
                 </div>
             </div>
+            
+            <div class="card hardware-simulator">
+                <h2>🛠️ Hardware Device Simulator</h2>
+                <p style="color: #7f8c8d; font-size: 14px; margin-bottom: 15px;">Simulate telemetry data sent from an ESP32 hardware safety button.</p>
+                
+                <div class="form-group">
+                    <label>Device Connection Status:</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <span class="status-indicator status-active" id="simDeviceStatus" style="margin-right: 5px;"></span>
+                        <span id="simDeviceStatusText" style="font-weight: 500;">Connected (ESP32-SG001)</span>
+                        <button class="btn btn-secondary" id="simToggleConnectionBtn" onclick="toggleSimConnection()" style="padding: 5px 12px; font-size: 12px; margin-left: auto; border-radius: 15px;">Disconnect</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Battery Level: <span id="simBatteryVal" style="color: #27ae60; font-weight: bold;">85%</span></label>
+                    <input type="range" class="form-control" id="simBatterySlider" min="0" max="100" value="85" oninput="updateSimBattery(this.value)">
+                </div>
+                
+                <div class="form-group">
+                    <label>GPS Location Simulation:</label>
+                    <div class="map-buttons" style="margin-top: 5px; justify-content: flex-start; gap: 10px;">
+                        <button class="view-map-btn" onclick="simulateMovement('walk')" style="padding: 8px 12px; font-size: 13px; border-radius: 8px;">🚶 Walk</button>
+                        <button class="view-map-btn" onclick="simulateMovement('run')" style="padding: 8px 12px; font-size: 13px; border-radius: 8px; background: linear-gradient(45deg, #e67e22, #d35400);">🏃 Run</button>
+                        <button class="view-map-btn" onclick="stopSimulateMovement()" style="padding: 8px 12px; font-size: 13px; border-radius: 8px; background: #7f8c8d;">⏹️ Stop</button>
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Hardware SOS Panic Button:</label>
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <button class="panic-button" onclick="triggerHardwareSOS()" style="width: 70px; height: 70px; font-size: 12px; margin: 0; box-shadow: 0 4px 10px rgba(231, 76, 60, 0.4);">HW SOS</button>
+                        <span style="font-size: 12px; color: #7f8c8d; max-width: 200px;">Simulates pressing the physical SOS button on your wearable IoT device</span>
+                    </div>
+                </div>
+            </div>
 
             <div class="card">
                 <h2>👥 Emergency Contacts</h2>
@@ -101,7 +142,8 @@
                         <option value="disabled">Disabled</option>
                     </select>
                 </div>
-                <button class="btn">Save Settings</button>
+                <button class="btn" onclick="alert('Settings saved successfully!')">Save Settings</button>
+                <button class="btn btn-secondary" onclick="openFirebaseConfigModal()" style="width: 100%; margin-top: 15px;">Configure Firebase Cloud</button>
             </div>
 
             <div class="card safety-resources">
@@ -141,15 +183,17 @@
         <div class="modal-content">
             <span class="close" onclick="closeModal('loginModal')">&times;</span>
             <h2>Login to SafeGuard</h2>
-            <div class="form-group">
-                <label>Email:</label>
-                <input type="email" class="form-control" placeholder="your.email@example.com">
-            </div>
-            <div class="form-group">
-                <label>Password:</label>
-                <input type="password" class="form-control" placeholder="Enter your password">
-            </div>
-            <button class="btn" onclick="login()" style="width: 100%;">Login</button>
+            <form onsubmit="event.preventDefault(); login();">
+                <div class="form-group">
+                    <label for="loginEmail">Email:</label>
+                    <input type="email" id="loginEmail" class="form-control" placeholder="your.email@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password:</label>
+                    <input type="password" id="loginPassword" class="form-control" placeholder="Enter your password" required>
+                </div>
+                <button type="submit" class="btn" style="width: 100%;">Login</button>
+            </form>
         </div>
     </div>
 
@@ -158,27 +202,29 @@
         <div class="modal-content">
             <span class="close" onclick="closeModal('registerModal')">&times;</span>
             <h2>Register for SafeGuard</h2>
-            <div class="form-group">
-                <label>Full Name:</label>
-                <input type="text" class="form-control" placeholder="Enter your full name">
-            </div>
-            <div class="form-group">
-                <label>Email:</label>
-                <input type="email" class="form-control" placeholder="your.email@example.com">
-            </div>
-            <div class="form-group">
-                <label>Phone Number:</label>
-                <input type="tel" class="form-control" placeholder="+91 98765 43210">
-            </div>
-            <div class="form-group">
-                <label>Password:</label>
-                <input type="password" class="form-control" placeholder="Create a strong password">
-            </div>
-            <div class="form-group">
-                <label>Device ID (from hardware):</label>
-                <input type="text" class="form-control" placeholder="SG001-2025">
-            </div>
-            <button class="btn" onclick="register()" style="width: 100%;">Register</button>
+            <form onsubmit="register(event)">
+                <div class="form-group">
+                    <label for="registerName">Full Name:</label>
+                    <input type="text" id="registerName" class="form-control" placeholder="Enter your full name" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">Email:</label>
+                    <input type="email" id="registerEmail" class="form-control" placeholder="your.email@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPhone">Phone Number:</label>
+                    <input type="tel" id="registerPhone" class="form-control" placeholder="+91 98765 43210" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password:</label>
+                    <input type="password" id="registerPassword" class="form-control" placeholder="Create a strong password" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerDeviceId">Device ID (from hardware):</label>
+                    <input type="text" id="registerDeviceId" class="form-control" placeholder="SG001-2025" required>
+                </div>
+                <button type="submit" class="btn" style="width: 100%;">Register</button>
+            </form>
         </div>
     </div>
 
@@ -211,9 +257,38 @@
             <button class="btn" onclick="addContact()" style="width: 100%;">Add Contact</button>
         </div>
     </div>
+
+    <!-- Firebase Config Modal -->
+    <div id="firebaseConfigModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('firebaseConfigModal')">&times;</span>
+            <h2>Firebase Project Credentials</h2>
+            <p style="color: #9ca3af; font-size: 13px; margin-bottom: 18px; text-align: center;">Enter your custom Firebase project keys to hook up your own cloud database.</p>
+            <form onsubmit="event.preventDefault(); saveCustomFirebaseConfig();">
+                <div class="form-group">
+                    <label for="fbApiKey">API Key:</label>
+                    <input type="text" id="fbApiKey" class="form-control" placeholder="AIzaSy..." required>
+                </div>
+                <div class="form-group">
+                    <label for="fbAuthDomain">Auth Domain:</label>
+                    <input type="text" id="fbAuthDomain" class="form-control" placeholder="project.firebaseapp.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="fbDbUrl">Database URL (Realtime DB):</label>
+                    <input type="url" id="fbDbUrl" class="form-control" placeholder="https://project-default-rtdb.firebaseio.com/" required>
+                </div>
+                <div class="form-group">
+                    <label for="fbProjectId">Project ID:</label>
+                    <input type="text" id="fbProjectId" class="form-control" placeholder="project-id" required>
+                </div>
+                <button type="submit" class="btn" style="width: 100%;">Save & Refresh</button>
+                <button type="button" class="btn btn-secondary" onclick="resetFirebaseConfig()" style="width: 100%; margin-top: 10px; background: #6b7280; box-shadow: none;">Reset to Default</button>
+            </form>
+        </div>
+    </div>
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>
-    <script src="index.js"></script>
+    <script src="index.js?v=2.0.1"></script>
 
 </body>
 </html>`

@@ -1,4 +1,4 @@
- // Global variables
+// Global variables
         let isSOSActive = false;
         let alertCounter = 1;
         let emergencyContacts = [];
@@ -7,13 +7,26 @@
         let locationInterval, watchId, keepAliveInterval;
         let lastUpdateTime = 0;
         let mapInitialized = false;
+
+        // Audio context for Emergency Siren beep sound
+        let audioContext = null;
+        let sirenInterval = null;
+
+        // Simulator states
+        let simConnectionActive = true;
+        let simBatteryLevel = 85;
+        let simInterval = null;
+
+        // Map breadcrumbs trail during SOS
+        let sosTrail = [];
+        let polylinePath = null;
         
         // Firebase configuration loaded from config.js
         const firebaseConfig = loadFirebaseConfig();
         
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        const userId = 'user_' + Math.random().toString(36).substr(2, 9);
+        let userId = 'user_' + Math.random().toString(36).substr(2, 9);
         
         // Load emergency contacts from Firebase with fallback to localStorage
         database.ref('emergencyContacts').on('value', (snapshot) => {
@@ -121,6 +134,9 @@
         });
         
         function showEmergencyNotification(alert, alertUserId) {
+            if (!alert || typeof alert.lat !== 'number' || typeof alert.lng !== 'number') {
+                return;
+            }
             // Show popup notification
             const notification = document.createElement('div');
             notification.id = 'alert-notification-' + alertUserId;
@@ -151,6 +167,9 @@
         }
         
         function addToActiveAlerts(alert, alertUserId) {
+            if (!alert || typeof alert.lat !== 'number' || typeof alert.lng !== 'number') {
+                return;
+            }
             // Clear "no alerts" message if it exists
             const noAlertsMsg = document.querySelector('#alertsList p');
             if (noAlertsMsg) {
@@ -217,33 +236,129 @@
         function closeModal(modalId) {
             document.getElementById(modalId).style.display = 'none';
         }
-
         // Authentication functions
         function login() {
-            // Simulate login
-            alert('Login successful! You can now access all features.');
-            closeModal('loginModal');
-            updateUIAfterLogin();
+            const emailInput = document.getElementById('loginEmail');
+            const passwordInput = document.getElementById('loginPassword');
+            
+            if (!emailInput || !passwordInput) {
+                console.log('Login fields not found on this page.');
+                return;
+            }
+            
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+            
+            if (!email || !password) {
+                alert('Please enter email and password.');
+                return;
+            }
+            
+            firebase.auth().signInWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    alert('Login successful!');
+                    closeModal('loginModal');
+                })
+                .catch((error) => {
+                    alert('Login failed: ' + error.message);
+                });
         }
 
-        function register() {
-            // Simulate registration
-            alert('Registration successful! Please verify your device ID.');
-            closeModal('registerModal');
-            updateUIAfterLogin();
+        function register(event) {
+            if (event) event.preventDefault();
+
+            const name = document.getElementById('registerName').value.trim();
+            const email = document.getElementById('registerEmail').value.trim();
+            const phone = document.getElementById('registerPhone').value.trim();
+            const password = document.getElementById('registerPassword').value;
+            const deviceId = document.getElementById('registerDeviceId').value.trim();
+
+            if (!name || !email || !phone || !password || !deviceId) {
+                alert('Please fill all fields.');
+                return;
+            }
+
+            // Create user with Firebase Auth
+            firebase.auth().createUserWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    const user = userCredential.user;
+                    // Save additional info to Firebase Database
+                    return firebase.database().ref('users/' + user.uid).set({
+                        name: name,
+                        email: email,
+                        phone: phone,
+                        deviceId: deviceId
+                    });
+                })
+                .then(() => {
+                    alert('Registration successful!');
+                    closeModal('registerModal');
+                    if (window.location.pathname.includes('register.html')) {
+                        window.location.href = "login.html";
+                    } else {
+                        openModal('loginModal');
+                    }
+                })
+                .catch((error) => {
+                    alert(error.message);
+                });
         }
 
-        function updateUIAfterLogin() {
-            document.querySelector('.auth-section').innerHTML = `
-                <span class="status-indicator status-active"></span>
-                <span>Welcome, User!</span>
-                <button class="btn" onclick="logout()">Logout</button>
-            `;
+        function updateUIAfterLogin(name, deviceId) {
+            const authSection = document.querySelector('.auth-section');
+            if (authSection) {
+                authSection.innerHTML = `
+                    <span class="status-indicator status-active" style="animation: blink 1.5s infinite;"></span>
+                    <span>👤 ${name}</span>
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 8px 18px; font-size: 14px; border-radius: 15px; margin-left: 10px;">Logout</button>
+                `;
+            }
+            // Update Device ID field in Settings if it exists
+            const deviceIdInput = document.querySelector('.card:nth-of-type(4) input[readonly]');
+            if (deviceIdInput) {
+                deviceIdInput.value = deviceId;
+            }
+        }
+
+        function updateUIAfterLogout() {
+            const authSection = document.querySelector('.auth-section');
+            if (authSection) {
+                authSection.innerHTML = `
+                    <span class="status-indicator status-inactive"></span>
+                    <span>Guest Mode</span>
+                    <button class="btn" onclick="openModal('loginModal')" style="padding: 8px 18px; font-size: 14px; border-radius: 15px;">Login</button>
+                    <button class="btn btn-secondary" onclick="openModal('registerModal')" style="padding: 8px 18px; font-size: 14px; border-radius: 15px;">Register</button>
+                `;
+            }
         }
 
         function logout() {
-            location.reload();
+            firebase.auth().signOut().then(() => {
+                alert('Logged out successfully.');
+                location.reload();
+            });
         }
+
+        // Firebase Auth State Observer
+        firebase.auth().onAuthStateChanged((user) => {
+            if (user) {
+                userId = user.uid;
+                database.ref('users/' + user.uid).once('value')
+                    .then((snapshot) => {
+                        const userData = snapshot.val();
+                        const displayName = userData ? userData.name : user.email;
+                        const deviceId = userData ? userData.deviceId : 'SG001-2025';
+                        updateUIAfterLogin(displayName, deviceId);
+                    })
+                    .catch((err) => {
+                        console.error('Error fetching user profile:', err);
+                        updateUIAfterLogin(user.email, 'SG001-2025');
+                    });
+            } else {
+                userId = 'guest_' + Math.random().toString(36).substr(2, 9);
+                updateUIAfterLogout();
+            }
+        });
 
         // SOS and Alert functions
         function triggerSOS() {
@@ -274,6 +389,19 @@
             const timestamp = new Date().toLocaleString();
             const alertId = String(alertCounter).padStart(3, '0');
             
+            // Add flashing SOS background on page and play siren sound
+            document.body.classList.add('sos-active');
+            playSiren();
+            
+            // Clear tracking breadcrumbs trail
+            sosTrail = [[currentLocation.lat, currentLocation.lng]];
+            if (polylinePath) {
+                try {
+                    map.removeLayer(polylinePath);
+                } catch (e) { console.log(e); }
+                polylinePath = null;
+            }
+
             // Clear "no alerts" message if it exists
             const noAlertsMsg = document.querySelector('#alertsList p');
             if (noAlertsMsg) {
@@ -288,7 +416,7 @@
                         <small>📍 ${currentLocation.lat.toFixed(4)}° N, ${currentLocation.lng.toFixed(4)}° E</small><br>
                         <small>⏰ ${timestamp}</small>
                     </div>
-                    <span class="alert-status" style="background: #e74c3c;">ACTIVE</span>
+                    <span class="alert-status" style="background: var(--danger-hover);">ACTIVE</span>
                 </div>
             `;
 
@@ -306,7 +434,7 @@
                 resolveAlert(alertId);
             }, 120000);
 
-            alert('🚨 SOS TRIGGERED!\n📍 Location sharing started\n📱 Emergency contacts notified');
+            alert('🚨 SOS TRIGGERED!\n📍 Real-time location sharing active\n🔊 Emergency audio siren playing\n📱 Emergency contacts notified');
         }
 
         function initializeMap(viewOnly = false) {
@@ -344,6 +472,7 @@
             
             // Listen for other users' locations
             database.ref('locations').on('value', (snapshot) => {
+                if (!map || !mapInitialized) return;
                 const locations = snapshot.val();
                 
                 // Remove markers for users no longer in locations
@@ -373,6 +502,11 @@
         }
         
         function updateUserMarker(id, location) {
+            if (!map || !mapInitialized) return;
+            if (!location || typeof location.lat !== 'number' || typeof location.lng !== 'number') {
+                return;
+            }
+            
             if (userMarkers[id]) {
                 map.removeLayer(userMarkers[id]);
             }
@@ -504,6 +638,9 @@
             currentLocation = { lat, lng };
             lastUpdateTime = Date.now();
             
+            // Add current point to the breadcrumbs trail
+            sosTrail.push([lat, lng]);
+            
             // Update Firebase with emergency status
             database.ref('locations/' + userId).set({
                 lat: lat,
@@ -533,17 +670,37 @@
                 map.removeLayer(myCircle);
             }
             
-            myMarker = L.marker([lat, lng])
+            // Custom pulsing emergency marker style
+            const emergencyIcon = L.divIcon({
+                html: '<div style="background: var(--danger); width: 22px; height: 22px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.5); animation: blink 1.2s infinite;"></div>',
+                iconSize: [22, 22],
+                className: 'my-emergency-marker'
+            });
+            
+            myMarker = L.marker([lat, lng], { icon: emergencyIcon })
                 .bindPopup('🚨 YOUR EMERGENCY LOCATION')
                 .addTo(map);
+                
             myCircle = L.circle([lat, lng], {
                 radius: accuracy,
-                color: 'red',
-                fillColor: '#ff0000',
-                fillOpacity: 0.2
+                color: 'var(--danger)',
+                fillColor: 'var(--danger)',
+                fillOpacity: 0.15
             }).addTo(map);
             
-            map.setView([lat, lng], 15);
+            // Draw path breadcrumbs trail on Leaflet map
+            if (polylinePath) {
+                polylinePath.setLatLngs(sosTrail);
+            } else if (map && mapInitialized) {
+                polylinePath = L.polyline(sosTrail, {
+                    color: 'var(--danger)',
+                    weight: 4,
+                    opacity: 0.8,
+                    dashArray: '6, 8'
+                }).addTo(map);
+            }
+            
+            map.setView([lat, lng], 16);
             
             // Add stop sharing button to map
             if (!document.getElementById('stopSharingBtn')) {
@@ -587,6 +744,19 @@
         
         function stopEmergencySharing() {
             if (confirm('Stop emergency location sharing?')) {
+                // Disable SOS visual and audio sirens
+                document.body.classList.remove('sos-active');
+                stopSiren();
+                
+                // Clear Leaflet route path
+                if (polylinePath) {
+                    try {
+                        map.removeLayer(polylinePath);
+                    } catch (e) { console.log(e); }
+                    polylinePath = null;
+                }
+                sosTrail = [];
+
                 // Stop all tracking
                 if (watchId) {
                     navigator.geolocation.clearWatch(watchId);
@@ -668,6 +838,19 @@
             }
 
             if (alertId === String(alertCounter).padStart(3, '0')) {
+                // Disable SOS visual overlay and audio alert beep
+                document.body.classList.remove('sos-active');
+                stopSiren();
+                
+                // Clear tracking trail
+                if (polylinePath) {
+                    try {
+                        map.removeLayer(polylinePath);
+                    } catch (e) { console.log(e); }
+                    polylinePath = null;
+                }
+                sosTrail = [];
+
                 // Stop all tracking
                 if (watchId) {
                     navigator.geolocation.clearWatch(watchId);
@@ -810,19 +993,224 @@
             alert('🤝 Women Support Organizations:\n\n• Women Helpline: 1091\n• Domestic Violence Helpline: 181\n• CHILDLINE: 1098\n• All Women Police Stations\n• Local NGOs and Support Centers\n\n(Contact details would be location-specific)');
         }
 
+        // Web Audio API Emergency Siren generator
+        function playSiren() {
+            try {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (sirenInterval) return; // Already running
+                
+                sirenInterval = setInterval(() => {
+                    if (!isSOSActive) {
+                        stopSiren();
+                        return;
+                    }
+                    const osc = audioContext.createOscillator();
+                    const gain = audioContext.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioContext.destination);
+                    
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(800, audioContext.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(1300, audioContext.currentTime + 0.45);
+                    
+                    gain.gain.setValueAtTime(0.15, audioContext.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                    
+                    osc.start();
+                    osc.stop(audioContext.currentTime + 0.55);
+                }, 600);
+            } catch (e) {
+                console.warn('Web Audio API not supported or user interaction required:', e);
+            }
+        }
+
+        function stopSiren() {
+            if (sirenInterval) {
+                clearInterval(sirenInterval);
+                sirenInterval = null;
+            }
+        }
+
+        // Hardware Simulator controls
+        function toggleSimConnection() {
+            simConnectionActive = !simConnectionActive;
+            
+            const statusDot = document.getElementById('simDeviceStatus');
+            const statusText = document.getElementById('simDeviceStatusText');
+            const btn = document.getElementById('simToggleConnectionBtn');
+            
+            // Find both status indicators in the dashboard and settings card
+            const indicators = document.querySelectorAll('.device-status .status-indicator, header .status-indicator');
+            const statusLabels = document.querySelectorAll('.device-status span:last-of-type, header span:last-of-type');
+            
+            if (simConnectionActive) {
+                statusDot.className = 'status-indicator status-active';
+                statusDot.style.background = '#34d399';
+                statusText.textContent = 'Connected (ESP32-SG001)';
+                btn.textContent = 'Disconnect';
+                btn.className = 'btn btn-secondary';
+                btn.style.background = '';
+                
+                indicators.forEach(ind => {
+                    ind.className = 'status-indicator status-active';
+                    ind.style.background = '#34d399';
+                });
+                statusLabels.forEach(lbl => {
+                    if (lbl.textContent.includes('Disconnected') || lbl.textContent.includes('Offline')) {
+                        lbl.textContent = 'Online - GPS Active';
+                    } else if (lbl.textContent.includes('Device Connected')) {
+                        lbl.textContent = 'Device Connected';
+                    }
+                });
+            } else {
+                statusDot.className = 'status-indicator status-inactive';
+                statusDot.style.background = '#f87171';
+                statusText.textContent = 'Disconnected';
+                btn.textContent = 'Connect';
+                btn.className = 'btn';
+                btn.style.background = 'var(--primary-gradient)';
+                
+                // Stop location sim
+                stopSimulateMovement();
+                
+                indicators.forEach(ind => {
+                    ind.className = 'status-indicator status-inactive';
+                    ind.style.background = '#f87171';
+                });
+                statusLabels.forEach(lbl => {
+                    if (lbl.textContent.includes('Online')) {
+                        lbl.textContent = 'Offline - Device disconnected';
+                    } else if (lbl.textContent.includes('Connected')) {
+                        lbl.textContent = 'Device Disconnected';
+                    }
+                });
+            }
+        }
+
+        function updateSimBattery(val) {
+            simBatteryLevel = parseInt(val);
+            const label = document.getElementById('simBatteryVal');
+            if (label) {
+                label.textContent = val + '%';
+                if (simBatteryLevel > 50) {
+                    label.style.color = '#34d399';
+                } else if (simBatteryLevel > 20) {
+                    label.style.color = '#fbbf24';
+                } else {
+                    label.style.color = '#f87171';
+                    console.warn('⚠️ Hardware Simulator: LOW BATTERY WARNING (' + val + '%)');
+                }
+            }
+        }
+
+        function simulateMovement(mode) {
+            if (!simConnectionActive) {
+                alert('Simulator: Please connect the hardware device first!');
+                return;
+            }
+            
+            stopSimulateMovement();
+            
+            const stepSize = mode === 'walk' ? 0.00015 : 0.00045;
+            alert(`Simulator: GPS Movement simulation started (${mode}ing)...`);
+            
+            simInterval = setInterval(() => {
+                // Walk coordinate update
+                currentLocation.lat += (Math.random() * 0.4 + 0.8) * stepSize;
+                currentLocation.lng += (Math.random() - 0.5) * 0.4 * stepSize;
+                
+                if (isSOSActive) {
+                    const position = {
+                        coords: {
+                            latitude: currentLocation.lat,
+                            longitude: currentLocation.lng,
+                            accuracy: 10 + Math.random() * 8
+                        }
+                    };
+                    updateLocation(position);
+                } else {
+                    if (map && mapInitialized) {
+                        if (myMarker) map.removeLayer(myMarker);
+                        myMarker = L.marker([currentLocation.lat, currentLocation.lng])
+                            .bindPopup('📍 Simulator Live Position (Ready)')
+                            .addTo(map);
+                        map.setView([currentLocation.lat, currentLocation.lng], 16);
+                    }
+                }
+            }, 3000);
+        }
+
+        function stopSimulateMovement() {
+            if (simInterval) {
+                clearInterval(simInterval);
+                simInterval = null;
+                alert('Simulator: GPS Movement simulation stopped.');
+            }
+        }
+
+        function triggerHardwareSOS() {
+            if (!simConnectionActive) {
+                alert('Simulator: Please connect the hardware device first!');
+                return;
+            }
+            alert('Simulator: 🚨 IoT Wearable Device SOS panic button pressed physically!');
+            triggerSOS();
+        }
+
         // Simulate hardware communication
         function simulateHardwareData() {
-            // This would receive real data from ESP32/Arduino via HTTP POST or MQTT
             const hardwareData = {
                 deviceId: 'SG001-2025',
-                latitude: currentLocation.lat + (Math.random() - 0.5) * 0.001,
-                longitude: currentLocation.lng + (Math.random() - 0.5) * 0.001,
-                batteryLevel: Math.floor(Math.random() * 100),
-                timestamp: new Date().toISOString()
+                latitude: currentLocation.lat,
+                longitude: currentLocation.lng,
+                batteryLevel: simBatteryLevel,
+                timestamp: new Date().toISOString(),
+                connected: simConnectionActive
             };
 
-            console.log('Hardware data received:', hardwareData);
+            console.log('Hardware telemetry received:', hardwareData);
             return hardwareData;
+        }
+
+        // Firebase Custom Configuration Editor
+        function openFirebaseConfigModal() {
+            const config = loadFirebaseConfig();
+            document.getElementById('fbApiKey').value = config.apiKey || '';
+            document.getElementById('fbAuthDomain').value = config.authDomain || '';
+            document.getElementById('fbDbUrl').value = config.databaseURL || '';
+            document.getElementById('fbProjectId').value = config.projectId || '';
+            openModal('firebaseConfigModal');
+        }
+
+        function saveCustomFirebaseConfig() {
+            const apiKey = document.getElementById('fbApiKey').value.trim();
+            const authDomain = document.getElementById('fbAuthDomain').value.trim();
+            const databaseURL = document.getElementById('fbDbUrl').value.trim();
+            const projectId = document.getElementById('fbProjectId').value.trim();
+            
+            const newConfig = {
+                apiKey,
+                authDomain,
+                databaseURL,
+                projectId,
+                storageBucket: projectId + ".firebasestorage.app",
+                messagingSenderId: "413352353793",
+                appId: "1:413352353793:web:1f2ee4284957e13c922000"
+            };
+            
+            localStorage.setItem('safeguard_firebase_config', JSON.stringify(newConfig));
+            alert('Custom Firebase configurations saved successfully! Page will reload.');
+            location.reload();
+        }
+
+        function resetFirebaseConfig() {
+            if (confirm('Reset Firebase configurations to system default?')) {
+                localStorage.removeItem('safeguard_firebase_config');
+                alert('Firebase settings reset to default! Page will reload.');
+                location.reload();
+            }
         }
 
         // Clear deleted markers (optional cleanup function)

@@ -2,10 +2,16 @@
 // This file loads Firebase config from environment variables or falls back to defaults
 
 function loadFirebaseConfig() {
-    // In a real environment, you would load from process.env or environment variables
-    // For client-side JavaScript, you can use build tools like Webpack or Vite to inject env vars
+    const savedConfig = localStorage.getItem('safeguard_firebase_config');
+    if (savedConfig) {
+        try {
+            return JSON.parse(savedConfig);
+        } catch (e) {
+            console.error('Error parsing saved Firebase config, resetting:', e);
+            localStorage.removeItem('safeguard_firebase_config');
+        }
+    }
     
-    // For now, we'll use a simple approach - you can replace this with actual env loading
     const config = {
         apiKey: window.ENV?.FIREBASE_API_KEY || "AIzaSyChVq9DHstMA9EXoNyDhZQb_qjRpHaMQIA",
         authDomain: window.ENV?.FIREBASE_AUTH_DOMAIN || "women-safety-tracker-2da51.firebaseapp.com",
